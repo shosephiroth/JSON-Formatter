@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart JSON Formatter & Healer</title>
+    <title>Smart JSON Formatter, Healer & Copier</title>
     <style>
         :root {
             --bg-color: #1e1e1e;
@@ -13,6 +13,7 @@
             --success-color: #4ec9b0;
             --error-color: #f44747;
             --warning-color: #ce9178;
+            --copy-btn: #3a3a3a;
         }
 
         body {
@@ -27,14 +28,14 @@
             box-sizing: border-box;
         }
 
-        h2 { margin-top: 0; color: var(--accent-color); }
+        h2 { margin-top: 0; color: var(--accent-color); font-weight: 300; }
 
         .container {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 20px;
             flex-grow: 1;
-            min-height: 0; /* Important for scroll */
+            min-height: 0;
         }
 
         .panel {
@@ -44,6 +45,7 @@
             border-radius: 8px;
             padding: 15px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            position: relative;
         }
 
         textarea, #jsonOutput {
@@ -52,7 +54,7 @@
             color: #9cdcfe;
             border: 1px solid #444;
             border-radius: 4px;
-            padding: 10px;
+            padding: 12px;
             font-family: 'Consolas', 'Monaco', monospace;
             font-size: 14px;
             resize: none;
@@ -73,48 +75,64 @@
         }
 
         button {
-            padding: 10px 20px;
+            padding: 10px 18px;
             border: none;
             border-radius: 4px;
             cursor: pointer;
-            font-weight: bold;
-            transition: 0.2s;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            font-size: 13px;
         }
 
         .btn-primary { background: var(--accent-color); color: white; }
-        .btn-primary:hover { background: #005fa3; }
+        .btn-primary:hover { background: #005fa3; transform: translateY(-1px); }
 
         .btn-secondary { background: #444; color: white; }
         .btn-secondary:hover { background: #555; }
 
-        /* Stats Section */
+        .btn-copy {
+            background: var(--copy-btn);
+            color: #fff;
+            border: 1px solid #555;
+        }
+        .btn-copy:hover { background: #4a4a4a; }
+        .btn-copy.copied { background: var(--success-color); color: #111; }
+
         #stats {
             background: #333;
             padding: 10px;
             border-radius: 4px;
             margin-bottom: 10px;
             border-left: 4px solid var(--warning-color);
-            display: none; /* Hidden by default */
+            display: none;
         }
 
-        .stat-line { font-size: 0.9em; margin: 2px 0; }
-        .error-text { color: var(--error-color); font-weight: bold; }
+        .stat-line { font-size: 0.85em; margin: 2px 0; opacity: 0.9; }
+        .error-text { color: var(--error-color); font-weight: bold; margin-bottom: 5px; }
+        
+        .hint {
+            font-size: 11px;
+            color: #777;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
 
-    <h2>Smart JSON Formatter & Healer</h2>
+    <h2>Smart JSON Formatter</h2>
 
     <div class="controls">
-        <button class="btn-primary" onclick="processJSON('expand')">Expand (Prettify)</button>
-        <button class="btn-primary" onclick="processJSON('collapse')">Collapse (Minify)</button>
+        <button class="btn-primary" onclick="processJSON('expand')">Format (Enter)</button>
+        <button class="btn-secondary" onclick="processJSON('collapse')">Collapse</button>
+        <button id="copyBtn" class="btn-copy" onclick="copyToClipboard()">Copy JSON</button>
         <button class="btn-secondary" onclick="clearAll()">Clear</button>
     </div>
 
     <div class="container">
         <div class="panel">
-            <label style="margin-bottom: 5px;">Input Raw JSON:</label>
-            <textarea id="jsonInput" placeholder="Paste messy or broken JSON here... (e.g. {name: 'Gemini',})"></textarea>
+            <label style="margin-bottom: 5px; font-size: 14px; opacity: 0.8;">Input:</label>
+            <textarea id="jsonInput" placeholder="Paste messy JSON here..."></textarea>
+            <div class="hint">Press <b>Enter</b> to format, <b>Shift + Enter</b> for new line.</div>
         </div>
 
         <div class="panel">
@@ -122,14 +140,23 @@
                 <div id="statSummary" class="error-text"></div>
                 <div id="statDetails"></div>
             </div>
-            <label style="margin-bottom: 5px;">Output:</label>
+            <label style="margin-bottom: 5px; font-size: 14px; opacity: 0.8;">Formatted Output:</label>
             <pre id="jsonOutput">Cleaned JSON will appear here...</pre>
         </div>
     </div>
 
     <script>
+        // --- FEATURE: ENTER KEY LISTENER ---
+        const inputArea = document.getElementById('jsonInput');
+        inputArea.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault(); // Stop the new line from being added
+                processJSON('expand');
+            }
+        });
+
         function processJSON(mode) {
-            const input = document.getElementById('jsonInput').value.trim();
+            const input = inputArea.value.trim();
             const outputElement = document.getElementById('jsonOutput');
             const statsPanel = document.getElementById('stats');
             const statSummary = document.getElementById('statSummary');
@@ -141,27 +168,25 @@
             let changes = [];
             let fixCount = 0;
 
-            // --- THE HEALER LOGIC ---
-
-            // 1. Fix single quotes to double quotes (for keys and values)
-            // This is a simple regex; it might need refinement for quotes inside strings
+            // --- HEALER LOGIC ---
+            // Fix single quotes
             const singleQuoteMatch = (cleaned.match(/'/g) || []).length;
             if (singleQuoteMatch > 0) {
                 cleaned = cleaned.replace(/'/g, '"');
-                changes.push(`Fixed ${singleQuoteMatch} single quotes to double quotes.`);
+                changes.push(`Converted ${singleQuoteMatch} single quotes.`);
                 fixCount++;
             }
 
-            // 2. Fix unquoted keys (e.g., {name: "Gemini"} -> {"name": "Gemini"})
+            // Fix unquoted keys
             const unquotedRegex = /([{,]\s*)([a-zA-Z0-9_]+?)\s*:/g;
             const unquotedMatch = (cleaned.match(unquotedRegex) || []).length;
             if (unquotedMatch > 0) {
                 cleaned = cleaned.replace(unquotedRegex, '$1"$2":');
-                changes.push(`Added quotes to ${unquotedMatch} unquoted keys.`);
+                changes.push(`Quoted ${unquotedMatch} keys.`);
                 fixCount++;
             }
 
-            // 3. Remove trailing commas (e.g., [1, 2, 3, ] -> [1, 2, 3])
+            // Fix trailing commas
             const trailingCommaRegex = /,\s*([\]}])/g;
             const trailingMatch = (cleaned.match(trailingCommaRegex) || []).length;
             if (trailingMatch > 0) {
@@ -170,39 +195,49 @@
                 fixCount++;
             }
 
-            // Try to parse the cleaned result
             try {
                 const obj = JSON.parse(cleaned);
-                
-                // Format based on mode
-                const finalOutput = (mode === 'expand') 
-                    ? JSON.stringify(obj, null, 4) 
-                    : JSON.stringify(obj);
-
+                const finalOutput = (mode === 'expand') ? JSON.stringify(obj, null, 4) : JSON.stringify(obj);
                 outputElement.textContent = finalOutput;
                 outputElement.style.color = "var(--success-color)";
 
-                // Show Stats if fixes were made
                 if (fixCount > 0) {
                     statsPanel.style.display = "block";
-                    statSummary.textContent = `Successfully healed ${fixCount} types of syntax errors!`;
+                    statSummary.textContent = `Healed ${fixCount} error types:`;
                     statDetails.innerHTML = changes.map(c => `<div class="stat-line">• ${c}</div>`).join('');
                 } else {
                     statsPanel.style.display = "none";
                 }
-
             } catch (e) {
-                // If parsing still fails after healing
                 statsPanel.style.display = "block";
-                statSummary.textContent = "Error: Could not fully heal this JSON.";
-                statDetails.innerHTML = `<div class="stat-line">The engine tried fixing basic errors, but there are still structural issues (like missing brackets).</div><div class="stat-line" style="color:white; margin-top:5px;">Details: ${e.message}</div>`;
-                outputElement.textContent = "Parsing failed. Check the error log above.";
+                statSummary.textContent = "Unfixable Error:";
+                statDetails.innerHTML = `<div class="stat-line">${e.message}</div>`;
+                outputElement.textContent = "Parsing failed.";
                 outputElement.style.color = "var(--error-color)";
             }
         }
 
+        // --- FEATURE: COPY TO CLIPBOARD ---
+        function copyToClipboard() {
+            const outputText = document.getElementById('jsonOutput').textContent;
+            const copyBtn = document.getElementById('copyBtn');
+
+            if (outputText === "Cleaned JSON will appear here..." || outputText === "Parsing failed.") return;
+
+            navigator.clipboard.writeText(outputText).then(() => {
+                const originalText = copyBtn.textContent;
+                copyBtn.textContent = "✓ Copied!";
+                copyBtn.classList.add('copied');
+                
+                setTimeout(() => {
+                    copyBtn.textContent = originalText;
+                    copyBtn.classList.remove('copied');
+                }, 2000);
+            });
+        }
+
         function clearAll() {
-            document.getElementById('jsonInput').value = "";
+            inputArea.value = "";
             document.getElementById('jsonOutput').textContent = "Cleaned JSON will appear here...";
             document.getElementById('stats').style.display = "none";
         }
