@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON Tool Pro | Search, Heal & Themes</title>
+    <style>
+        /* CSS Variables for Easy Theme Swapping */
+        :root {
+            --bg-color: #f5f5f5;
+            --panel-bg: #ffffff;
+            --text-color: #333333;
+            --accent-color: #007acc;
+            --success-color: #28a745;
+            --error-color: #dc3545;
+            --warning-color: #ffc107;
+            --input-bg: #ffffff;
+            --output-bg: #f8f9fa;
+            --border-color: #dddddd;
+            --highlight: #fff3cd;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #1e1e1e;
+            --panel-bg: #2d2d2d;
+            --text-color: #d4d4d4;
+            --accent-color: #3794ff;
+            --success-color: #4ec9b0;
+            --error-color: #f44747;
+            --warning-color: #ce9178;
+            --input-bg: #111111;
+            --output-bg: #111111;
+            --border-color: #444444;
+            --highlight: #613315;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+            transition: background 0.3s ease;
+        }
+
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        h2 { margin: 0; color: var(--accent-color); font-weight: 400; }
+
+        .controls {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            flex-grow: 1;
+            min-height: 0;
+        }
+
+        .panel {
+            display: flex;
+            flex-direction: column;
+            background: var(--panel-bg);
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border: 2px solid transparent;
+        }
+
+        textarea, #jsonOutput {
+            flex-grow: 1;
+            background: var(--input-bg);
+            color: inherit;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 12px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            resize: none;
+            overflow: auto;
+        }
+
+        mark { background: var(--highlight); color: inherit; border-radius: 2px; }
+
+        button, .search-input {
+            padding: 8px 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: var(--panel-bg);
+            color: var(--text-color);
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        button:hover { background: var(--border-color); }
+        .btn-primary { background: var(--accent-color); color: white; border: none; }
+        .btn-primary:hover { opacity: 0.9; }
+
+        .search-input { width: 200px; cursor: text; }
+        
+        #stats {
+            background: rgba(0,0,0,0.05);
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            border-left: 4px solid var(--warning-color);
+            display: none;
+        }
+
+        .hint { font-size: 11px; color: #777; margin-top: 5px; }
+    </style>
+</head>
+<body data-theme="dark">
+
+    <div class="header">
+        <h2>JSON Tool Pro</h2>
+        <button onclick="toggleTheme()" id="themeToggle">☀️ Light Mode</button>
+    </div>
+
+    <div class="controls">
+        <button class="btn-primary" onclick="processJSON('expand')">Format (Enter)</button>
+        <button onclick="processJSON('collapse')">Collapse</button>
+        <button onclick="document.getElementById('fileInput').click()">📁 Load</button>
+        <input type="file" id="fileInput" hidden onchange="handleFileSelect(event)">
+        <button id="copyBtn" onclick="copyToClipboard()">Copy JSON</button>
+        <input type="text" id="searchInput" class="search-input" placeholder="🔍 Search keys/values..." oninput="performSearch()">
+        <button onclick="clearAll()">Clear</button>
+    </div>
+
+    <div class="container">
+        <div class="panel" id="inputPanel">
+            <textarea id="jsonInput" placeholder="Paste JSON or drag file here..."></textarea>
+            <div class="hint"><b>Enter</b>: Format | <b>Shift+Enter</b>: New Line</div>
+        </div>
+
+        <div class="panel">
+            <div id="stats">
+                <div id="statSummary" style="font-weight: bold; color: var(--error-color);"></div>
+                <div id="statDetails" style="font-size: 0.85em;"></div>
+            </div>
+            <pre id="jsonOutput" style="white-space: pre-wrap;">Cleaned JSON will appear here...</pre>
+        </div>
+    </div>
+
+    <script>
+        const inputArea = document.getElementById('jsonInput');
+        const outputElement = document.getElementById('jsonOutput');
+        let currentRawOutput = ""; // Store raw text for copying without search tags
+
+        // --- THEME TOGGLE ---
+        function toggleTheme() {
+            const body = document.body;
+            const btn = document.getElementById('themeToggle');
+            if (body.getAttribute('data-theme') === 'dark') {
+                body.setAttribute('data-theme', 'light');
+                btn.textContent = "🌙 Dark Mode";
+            } else {
+                body.setAttribute('data-theme', 'dark');
+                btn.textContent = "☀️ Light Mode";
+            }
+        }
+
+        // --- SEARCH LOGIC ---
+        function performSearch() {
+            const query = document.getElementById('searchInput').value;
+            if (!currentRawOutput) return;
+
+            if (!query) {
+                outputElement.textContent = currentRawOutput;
+                return;
+            }
+
+            // Escape regex special characters and wrap matches in <mark>
+            const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`(${escapedQuery})`, 'gi');
+            const highlighted = currentRawOutput.replace(regex, '<mark>$1</mark>');
+            outputElement.innerHTML = highlighted;
+        }
+
+        // --- FORMAT & HEAL LOGIC ---
+        function processJSON(mode) {
+            let cleaned = inputArea.value.trim();
+            if (!cleaned) return;
+            let changes = [];
+
+            // Simple Healer (Quotes, Keys, Commas)
+            if (cleaned.includes("'")) { cleaned = cleaned.replace(/'/g, '"'); changes.push("Fixed single quotes"); }
+            cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z0-9_]+?)\s*:/g, '$1"$2":'); // Unquoted keys
+            cleaned = cleaned.replace(/,\s*([\]}])/g, '$1'); // Trailing commas
+
+            try {
+                const obj = JSON.parse(cleaned);
+                currentRawOutput = (mode === 'expand') ? JSON.stringify(obj, null, 4) : JSON.stringify(obj);
+                
+                outputElement.textContent = currentRawOutput;
+                outputElement.style.color = "var(--success-color)";
+                document.getElementById('stats').style.display = changes.length ? "block" : "none";
+                document.getElementById('statSummary').textContent = changes.length ? "Auto-Fixed Errors:" : "";
+                document.getElementById('statDetails').textContent = changes.join(", ");
+                
+                if (document.getElementById('searchInput').value) performSearch();
+            } catch (e) {
+                outputElement.textContent = "Parsing failed: " + e.message;
+                outputElement.style.color = "var(--error-color)";
+            }
+        }
+
+        // --- UTILITIES (Copy, File, Shortcuts) ---
+        function copyToClipboard() {
+            navigator.clipboard.writeText(currentRawOutput || outputElement.textContent);
+            const btn = document.getElementById('copyBtn');
+            btn.textContent = "✓ Copied";
+            setTimeout(() => btn.textContent = "Copy JSON", 2000);
+        }
+
+        function handleFileSelect(e) {
+            const reader = new FileReader();
+            reader.onload = (ev) => { inputArea.value = ev.target.result; processJSON('expand'); };
+            reader.readAsText(e.target.files[0]);
+        }
+
+        inputArea.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); processJSON('expand'); }
+        });
+
+        function clearAll() {
+            inputArea.value = "";
+            outputElement.textContent = "Cleaned JSON will appear here...";
+            currentRawOutput = "";
+            document.getElementById('stats').style.display = "none";
+            document.getElementById('searchInput').value = "";
+        }
+    </script>
+</body>
+</html>
