@@ -3,22 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart JSON Tool | Healer & File Loader</title>
+    <title>JSON Tool Pro | Search, Heal & Themes</title>
     <style>
+        /* CSS Variables for Easy Theme Swapping */
         :root {
+            --bg-color: #f5f5f5;
+            --panel-bg: #ffffff;
+            --text-color: #333333;
+            --accent-color: #007acc;
+            --success-color: #28a745;
+            --error-color: #dc3545;
+            --warning-color: #ffc107;
+            --input-bg: #ffffff;
+            --output-bg: #f8f9fa;
+            --border-color: #dddddd;
+            --highlight: #fff3cd;
+        }
+
+        [data-theme="dark"] {
             --bg-color: #1e1e1e;
             --panel-bg: #2d2d2d;
             --text-color: #d4d4d4;
-            --accent-color: #007acc;
+            --accent-color: #3794ff;
             --success-color: #4ec9b0;
             --error-color: #f44747;
             --warning-color: #ce9178;
-            --copy-btn: #3a3a3a;
-            --drag-bg: #37373d;
+            --input-bg: #111111;
+            --output-bg: #111111;
+            --border-color: #444444;
+            --highlight: #613315;
         }
 
         body {
-            font-family: 'Segoe UI', sans-serif;
+            font-family: 'Segoe UI', system-ui, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
@@ -27,9 +44,11 @@
             height: 100vh;
             padding: 20px;
             box-sizing: border-box;
+            transition: background 0.3s ease;
         }
 
-        h2 { margin-top: 0; color: var(--accent-color); font-weight: 300; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        h2 { margin: 0; color: var(--accent-color); font-weight: 400; }
 
         .controls {
             margin-bottom: 15px;
@@ -53,22 +72,15 @@
             background: var(--panel-bg);
             border-radius: 8px;
             padding: 15px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
             border: 2px solid transparent;
-            transition: all 0.2s;
-        }
-
-        /* Drag and Drop Highlight */
-        .panel.drag-over {
-            border: 2px dashed var(--accent-color);
-            background: var(--drag-bg);
         }
 
         textarea, #jsonOutput {
             flex-grow: 1;
-            background: #111;
-            color: #9cdcfe;
-            border: 1px solid #444;
+            background: var(--input-bg);
+            color: inherit;
+            border: 1px solid var(--border-color);
             border-radius: 4px;
             padding: 12px;
             font-family: 'Consolas', 'Monaco', monospace;
@@ -77,29 +89,27 @@
             overflow: auto;
         }
 
-        #jsonOutput { white-space: pre-wrap; margin: 0; color: var(--success-color); }
+        mark { background: var(--highlight); color: inherit; border-radius: 2px; }
 
-        button {
-            padding: 10px 18px;
-            border: none;
+        button, .search-input {
+            padding: 8px 15px;
+            border: 1px solid var(--border-color);
             border-radius: 4px;
+            background: var(--panel-bg);
+            color: var(--text-color);
             cursor: pointer;
-            font-weight: 600;
-            transition: all 0.2s;
             font-size: 13px;
+            transition: all 0.2s;
         }
 
-        .btn-primary { background: var(--accent-color); color: white; }
-        .btn-primary:hover { background: #005fa3; }
+        button:hover { background: var(--border-color); }
+        .btn-primary { background: var(--accent-color); color: white; border: none; }
+        .btn-primary:hover { opacity: 0.9; }
 
-        .btn-secondary { background: #444; color: white; }
-        .btn-secondary:hover { background: #555; }
-
-        .btn-copy { background: var(--copy-btn); color: #fff; border: 1px solid #555; }
-        .btn-copy.copied { background: var(--success-color); color: #111; }
-
+        .search-input { width: 200px; cursor: text; }
+        
         #stats {
-            background: #333;
+            background: rgba(0,0,0,0.05);
             padding: 10px;
             border-radius: 4px;
             margin-bottom: 10px;
@@ -107,174 +117,128 @@
             display: none;
         }
 
-        .stat-line { font-size: 0.85em; margin: 2px 0; opacity: 0.9; }
-        .error-text { color: var(--error-color); font-weight: bold; margin-bottom: 5px; }
-        
         .hint { font-size: 11px; color: #777; margin-top: 5px; }
-        
-        input[type="file"] { display: none; }
     </style>
 </head>
-<body>
+<body data-theme="dark">
 
-    <h2>Smart JSON Tool</h2>
+    <div class="header">
+        <h2>JSON Tool Pro</h2>
+        <button onclick="toggleTheme()" id="themeToggle">☀️ Light Mode</button>
+    </div>
 
     <div class="controls">
         <button class="btn-primary" onclick="processJSON('expand')">Format (Enter)</button>
-        <button class="btn-secondary" onclick="processJSON('collapse')">Collapse</button>
-        
-        <input type="file" id="fileInput" accept=".json,.txt" onchange="handleFileSelect(event)">
-        <button class="btn-secondary" onclick="document.getElementById('fileInput').click()">📁 Load File</button>
-        
-        <button id="copyBtn" class="btn-copy" onclick="copyToClipboard()">Copy JSON</button>
-        <button class="btn-secondary" onclick="clearAll()">Clear</button>
+        <button onclick="processJSON('collapse')">Collapse</button>
+        <button onclick="document.getElementById('fileInput').click()">📁 Load</button>
+        <input type="file" id="fileInput" hidden onchange="handleFileSelect(event)">
+        <button id="copyBtn" onclick="copyToClipboard()">Copy JSON</button>
+        <input type="text" id="searchInput" class="search-input" placeholder="🔍 Search keys/values..." oninput="performSearch()">
+        <button onclick="clearAll()">Clear</button>
     </div>
 
     <div class="container">
         <div class="panel" id="inputPanel">
-            <label style="margin-bottom: 5px; font-size: 14px; opacity: 0.8;">Input (Drop file here):</label>
-            <textarea id="jsonInput" placeholder="Paste JSON or drag a file here..."></textarea>
+            <textarea id="jsonInput" placeholder="Paste JSON or drag file here..."></textarea>
             <div class="hint"><b>Enter</b>: Format | <b>Shift+Enter</b>: New Line</div>
         </div>
 
         <div class="panel">
             <div id="stats">
-                <div id="statSummary" class="error-text"></div>
-                <div id="statDetails"></div>
+                <div id="statSummary" style="font-weight: bold; color: var(--error-color);"></div>
+                <div id="statDetails" style="font-size: 0.85em;"></div>
             </div>
-            <label style="margin-bottom: 5px; font-size: 14px; opacity: 0.8;">Formatted Output:</label>
-            <pre id="jsonOutput">Cleaned JSON will appear here...</pre>
+            <pre id="jsonOutput" style="white-space: pre-wrap;">Cleaned JSON will appear here...</pre>
         </div>
     </div>
 
     <script>
         const inputArea = document.getElementById('jsonInput');
-        const inputPanel = document.getElementById('inputPanel');
+        const outputElement = document.getElementById('jsonOutput');
+        let currentRawOutput = ""; // Store raw text for copying without search tags
 
-        // --- FEATURE: DRAG AND DROP ---
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            inputPanel.addEventListener(eventName, preventDefaults, false);
-        });
-
-        function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
-
-        inputPanel.addEventListener('dragover', () => inputPanel.classList.add('drag-over'));
-        ['dragleave', 'drop'].forEach(eventName => {
-            inputPanel.addEventListener(eventName, () => inputPanel.classList.remove('drag-over'));
-        });
-
-        inputPanel.addEventListener('drop', (e) => {
-            const dt = e.dataTransfer;
-            const file = dt.files[0];
-            readFile(file);
-        });
-
-        // --- FEATURE: FILE INPUT ---
-        function handleFileSelect(e) {
-            const file = e.target.files[0];
-            readFile(file);
-        }
-
-        function readFile(file) {
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                inputArea.value = e.target.result;
-                processJSON('expand'); // Auto-format after loading
-            };
-            reader.readAsText(file);
-        }
-
-        // --- KEYBOARD SHORTCUT ---
-        inputArea.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                processJSON('expand');
+        // --- THEME TOGGLE ---
+        function toggleTheme() {
+            const body = document.body;
+            const btn = document.getElementById('themeToggle');
+            if (body.getAttribute('data-theme') === 'dark') {
+                body.setAttribute('data-theme', 'light');
+                btn.textContent = "🌙 Dark Mode";
+            } else {
+                body.setAttribute('data-theme', 'dark');
+                btn.textContent = "☀️ Light Mode";
             }
-        });
+        }
 
-        // --- MAIN LOGIC (FORMAT & HEAL) ---
+        // --- SEARCH LOGIC ---
+        function performSearch() {
+            const query = document.getElementById('searchInput').value;
+            if (!currentRawOutput) return;
+
+            if (!query) {
+                outputElement.textContent = currentRawOutput;
+                return;
+            }
+
+            // Escape regex special characters and wrap matches in <mark>
+            const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`(${escapedQuery})`, 'gi');
+            const highlighted = currentRawOutput.replace(regex, '<mark>$1</mark>');
+            outputElement.innerHTML = highlighted;
+        }
+
+        // --- FORMAT & HEAL LOGIC ---
         function processJSON(mode) {
-            const input = inputArea.value.trim();
-            const outputElement = document.getElementById('jsonOutput');
-            const statsPanel = document.getElementById('stats');
-            const statSummary = document.getElementById('statSummary');
-            const statDetails = document.getElementById('statDetails');
-
-            if (!input) return;
-
-            let cleaned = input;
+            let cleaned = inputArea.value.trim();
+            if (!cleaned) return;
             let changes = [];
-            let fixCount = 0;
 
-            // Healing logic (Regex)
-            const singleQuoteMatch = (cleaned.match(/'/g) || []).length;
-            if (singleQuoteMatch > 0) {
-                cleaned = cleaned.replace(/'/g, '"');
-                changes.push(`Fixed ${singleQuoteMatch} single quotes.`);
-                fixCount++;
-            }
-
-            const unquotedRegex = /([{,]\s*)([a-zA-Z0-9_]+?)\s*:/g;
-            const unquotedMatch = (cleaned.match(unquotedRegex) || []).length;
-            if (unquotedMatch > 0) {
-                cleaned = cleaned.replace(unquotedRegex, '$1"$2":');
-                changes.push(`Quoted ${unquotedMatch} keys.`);
-                fixCount++;
-            }
-
-            const trailingCommaRegex = /,\s*([\]}])/g;
-            const trailingMatch = (cleaned.match(trailingCommaRegex) || []).length;
-            if (trailingMatch > 0) {
-                cleaned = cleaned.replace(trailingCommaRegex, '$1');
-                changes.push(`Removed ${trailingMatch} trailing commas.`);
-                fixCount++;
-            }
+            // Simple Healer (Quotes, Keys, Commas)
+            if (cleaned.includes("'")) { cleaned = cleaned.replace(/'/g, '"'); changes.push("Fixed single quotes"); }
+            cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z0-9_]+?)\s*:/g, '$1"$2":'); // Unquoted keys
+            cleaned = cleaned.replace(/,\s*([\]}])/g, '$1'); // Trailing commas
 
             try {
                 const obj = JSON.parse(cleaned);
-                const finalOutput = (mode === 'expand') ? JSON.stringify(obj, null, 4) : JSON.stringify(obj);
-                outputElement.textContent = finalOutput;
+                currentRawOutput = (mode === 'expand') ? JSON.stringify(obj, null, 4) : JSON.stringify(obj);
+                
+                outputElement.textContent = currentRawOutput;
                 outputElement.style.color = "var(--success-color)";
-
-                if (fixCount > 0) {
-                    statsPanel.style.display = "block";
-                    statSummary.textContent = `Healed ${fixCount} types of errors:`;
-                    statDetails.innerHTML = changes.map(c => `<div class="stat-line">• ${c}</div>`).join('');
-                } else {
-                    statsPanel.style.display = "none";
-                }
+                document.getElementById('stats').style.display = changes.length ? "block" : "none";
+                document.getElementById('statSummary').textContent = changes.length ? "Auto-Fixed Errors:" : "";
+                document.getElementById('statDetails').textContent = changes.join(", ");
+                
+                if (document.getElementById('searchInput').value) performSearch();
             } catch (e) {
-                statsPanel.style.display = "block";
-                statSummary.textContent = "Syntax Error:";
-                statDetails.innerHTML = `<div class="stat-line">${e.message}</div>`;
-                outputElement.textContent = "Parsing failed.";
+                outputElement.textContent = "Parsing failed: " + e.message;
                 outputElement.style.color = "var(--error-color)";
             }
         }
 
-        // --- COPY TO CLIPBOARD ---
+        // --- UTILITIES (Copy, File, Shortcuts) ---
         function copyToClipboard() {
-            const outputText = document.getElementById('jsonOutput').textContent;
-            const copyBtn = document.getElementById('copyBtn');
-            if (outputText.includes("appear here") || outputText.includes("failed")) return;
-
-            navigator.clipboard.writeText(outputText).then(() => {
-                const originalText = copyBtn.textContent;
-                copyBtn.textContent = "✓ Copied!";
-                copyBtn.classList.add('copied');
-                setTimeout(() => {
-                    copyBtn.textContent = originalText;
-                    copyBtn.classList.remove('copied');
-                }, 2000);
-            });
+            navigator.clipboard.writeText(currentRawOutput || outputElement.textContent);
+            const btn = document.getElementById('copyBtn');
+            btn.textContent = "✓ Copied";
+            setTimeout(() => btn.textContent = "Copy JSON", 2000);
         }
+
+        function handleFileSelect(e) {
+            const reader = new FileReader();
+            reader.onload = (ev) => { inputArea.value = ev.target.result; processJSON('expand'); };
+            reader.readAsText(e.target.files[0]);
+        }
+
+        inputArea.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); processJSON('expand'); }
+        });
 
         function clearAll() {
             inputArea.value = "";
-            document.getElementById('jsonOutput').textContent = "Cleaned JSON will appear here...";
+            outputElement.textContent = "Cleaned JSON will appear here...";
+            currentRawOutput = "";
             document.getElementById('stats').style.display = "none";
-            document.getElementById('fileInput').value = "";
+            document.getElementById('searchInput').value = "";
         }
     </script>
 </body>
