@@ -55,5 +55,6 @@ This application is a **Single Page Application (SPA)**. It requires no backend,
 1. Clone the repository.
 2. Open `index.html` in any modern web browser.
 3. *(Optional)* Host it for free using **GitHub Pages**.
+4. Can also view here: https://shosephiroth.github.io/JSON-Formatter/ 
 
 ---
